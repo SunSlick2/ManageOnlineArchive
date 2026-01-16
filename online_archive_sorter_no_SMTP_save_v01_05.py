@@ -1,0 +1,705 @@
+# -*- coding: utf-8 -*-
+"""Online_Archive_Sorter_v01.03.py
+Modified: Writing of smtp_cache to Excel removed.
+"""
+
+import os
+import win32com.client
+import pandas as pd
+import datetime
+import openpyxl
+import tkinter as tk
+from tkinter import messagebox
+from tkinter import simpledialog
+from tkcalendar import Calendar
+import threading
+import logging
+import time
+import json
+import re
+import pythoncom
+import sys
+
+class OnlineArchiveSorter:
+    """
+    A class to sort (delete) emails in Outlook based on rules defined in an Excel file.
+    Forked from InboxSorter_v38.08.
+    Supports BULK processing only, recursively traversing all folders in the mailbox.
+    Rules are currently limited to KeywordSubject_ToDelete1 (Rule 1) and KeywordSubject_ToDelete (Rule 7),
+    both resulting in the DELETION of the matched email.
+
+    Version 01.04: Reverts EntryID collection and implements robust backward index iteration
+                   with specific COM error handling to prevent 'item moved or deleted' errors
+                   during bulk deletion, ensuring stable processing of large folders.
+    """
+
+    # --- UPDATED CONSTANTS FOR ARCHIVE SORTER ---
+    CONFIG_FILE_NAME = 'config_archive_v01.json'
+    # Save cache to Excel after this many emails have been processed (resolved or not)
+    CACHE_SAVE_INTERVAL = 500
+    # Outlook item class constant for MailItem
+    OL_MAIL_ITEM = 43
+    # COM error code for 'The item has been moved or deleted' (HRESULT -2147221238)
+    ITEM_MOVED_OR_DELETED_HRESULT = -2147221238
+    # --------------------------------------------
+
+    def __init__(self, config_path=None):
+        """
+        Initializes the EmailSorter with configuration, sets up paths,
+        loads data from Excel.
+        """
+        self.config_path = config_path if config_path else self.CONFIG_FILE_NAME
+
+        self.config = None
+        self.xls_path = None
+        self.log_bulk_path = None
+        self.log_invalid_path = None
+        self.archive_folder_name = None
+
+        # Data holders for loaded rules - only 1 and 7 are *used* in process_email
+        self.keyword_subject_to_delete1_keywords = set() # Rule 1
+        self.my_cliente_emails = set() # Rule 2 (Disabled)
+        self.dacs_notmine_emails = set() # Rule 3 (Disabled)
+        self.my_client_keywords = set() # Rule 4 (Disabled)
+        self.dacs_notmine_keywords = set() # Rule 5 (Disabled)
+        self.trade_details_emails = set() # Rule 6 (Disabled)
+        self.keyword_subject_to_delete_keywords = set() # Rule 7
+
+        self.smtp_cache = {}
+        self.new_smtp_entries = {}
+
+        self.invalid_logger = None
+        self.bulk_logger = None
+
+        try:
+            self._load_config()
+            self.setup_paths()
+            self.setup_logging()
+
+            self.load_data() # Load all data from Excel
+
+            self.invalid_logger.info("OnlineArchiveSorter initialized successfully (V01.04 - Bulk/Delete Mode).")
+        except Exception as e:
+            error_message = f"Initialization error: {e}"
+            print(error_message)
+            if self.invalid_logger:
+                self.invalid_logger.error(f"InitializationError||OnlineArchiveSorter.__init__|{error_message}")
+            messagebox.showerror("Initialization Error", error_message)
+            raise
+
+    def _load_config(self):
+        """
+        Loads configuration from the JSON file.
+        Checks for essential paths and sheet mappings.
+        """
+        try:
+            print(f"Attempting to load config from: {os.path.abspath(self.config_path)}")
+            with open(self.config_path, 'r') as f:
+                self.config = json.load(f)
+
+            required_top_level_keys = ['xls_path', 'log_bulk_path', 'log_invalid_path', 'sheet_map', 'archive_folder_name']
+            for key in required_top_level_keys:
+                if key not in self.config:
+                    if key == 'archive_folder_name' and self.config.get(key) == "":
+                        continue
+                    raise ValueError(f"Missing required top-level configuration key: '{key}'")
+
+            expected_rule_structure = {
+                "KeywordSubject_ToDelete1": {"sheet": str, "columns": list, "match_field": str, "destination_name": str},
+                "MyClienteMailAddresses": {"sheet": str, "column": str, "destination_name": str},
+                "DACSNotMineEmail": {"sheet": str, "column": str, "destination_name": str},
+                "MyClientKeywords": {"sheet": str, "columns": list, "match_field": str, "destination_name": str},
+                "DACSNotMineKeyword": {"sheet": str, "columns": list, "match_field": str, "destination_name": str},
+                "TradeDetailseMailAddresses": {"sheet": str, "column": str, "destination_name": str},
+                "KeywordSubject_ToDelete": {"sheet": str, "columns": list, "match_field": str, "destination_name": str},
+                "SMTPResolutionCache": {"sheet": str}
+            }
+            for rule_name, required_keys in expected_rule_structure.items():
+                if rule_name not in self.config['sheet_map']:
+                    raise ValueError(f"Missing required rule configuration in sheet_map: '{rule_name}'")
+
+            self.archive_folder_name = self.config.get('archive_folder_name', '').strip()
+            if not self.archive_folder_name:
+                raise ValueError("The 'archive_folder_name' field is empty in the config file. Please specify the exact name of your Online Archive mailbox as it appears in Outlook.")
+
+            print(f"Configuration loaded successfully from {self.config_path}")
+        except Exception as e:
+            raise e
+
+    def setup_paths(self):
+        """Sets up file paths from the loaded configuration."""
+        self.xls_path = self.config['xls_path']
+        self.log_bulk_path = self.config['log_bulk_path']
+        self.log_invalid_path = self.config['log_invalid_path']
+
+        os.makedirs(os.path.dirname(self.log_bulk_path) or '.', exist_ok=True)
+        os.makedirs(os.path.dirname(self.log_invalid_path) or '.', exist_ok=True)
+
+        print(f"Paths set: Excel='{self.xls_path}', BulkLog='{self.log_bulk_path}', InvalidLog='{self.log_invalid_path}'")
+
+    def setup_logging(self):
+        """Configures logging for bulk and invalid email entries."""
+        self.invalid_logger = self._create_logger('invalid_log', self.log_invalid_path, level=logging.ERROR)
+        self.bulk_logger = self._create_logger('bulk_log', self.log_bulk_path, level=logging.INFO)
+        print("Logging setup complete.")
+
+    def _create_logger(self, name, log_path, level=logging.INFO):
+        """Helper to create and configure a logger."""
+        logger = logging.getLogger(name)
+        logger.setLevel(level)
+        if logger.handlers:
+            for handler in list(logger.handlers):
+                logger.removeHandler(handler)
+        handler = logging.FileHandler(log_path, mode='a', encoding='utf-8')
+        formatter = logging.Formatter('%(asctime)s|%(levelname)s|%(message)s')
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+        return logger
+
+    def load_data(self):
+        """Loads all necessary data (email addresses, keywords, SMTP cache) from the Excel file."""
+        try:
+            self.tables = pd.read_excel(self.xls_path, sheet_name=None, dtype=str, engine='openpyxl')
+            print(f"Excel file '{self.xls_path}' loaded successfully.")
+        except Exception as e:
+            error_msg = f"Error reading Excel file: {e}"
+            self.invalid_logger.error(f"ExcelReadError||load_data|{error_msg}")
+            raise ValueError(error_msg)
+
+        try:
+            self.keyword_subject_to_delete1_keywords = self._load_keywords('KeywordSubject_ToDelete1')
+            self.my_cliente_emails = self._load_email_addresses('MyClienteMailAddresses')
+            self.dacs_notmine_emails = self._load_email_addresses('DACSNotMineEmail')
+            self.my_client_keywords = self._load_keywords('MyClientKeywords')
+            self.dacs_notmine_keywords = self._load_keywords('DACSNotMineKeyword')
+            self.trade_details_emails = self._load_email_addresses('TradeDetailseMailAddresses')
+            self.keyword_subject_to_delete_keywords = self._load_keywords('KeywordSubject_ToDelete')
+            self.smtp_cache = self._load_smtp_cache()
+
+            print(f"Loaded keywords (R1: {len(self.keyword_subject_to_delete1_keywords)}, R7: {len(self.keyword_subject_to_delete_keywords)}) and cache ({len(self.smtp_cache)} entries).")
+        except Exception as e:
+            self.invalid_logger.error(f"DataLoadError||load_data|A rule failed to load: {e}")
+            print(f"Warning: A rule failed to load, check invalid log for details: {e}")
+
+        self.new_smtp_entries = {}
+
+    def _load_email_addresses(self, rule_name):
+        """Loads email addresses from a specified Excel sheet and column."""
+        sheet_config = self.config['sheet_map'][rule_name]
+        sheet_name = sheet_config['sheet']
+        column_name = sheet_config['column']
+        if sheet_name not in self.tables:
+            raise ValueError(f"Sheet '{sheet_name}' not found in Excel file for '{rule_name}'")
+        df = self.tables[sheet_name]
+        if column_name not in df.columns:
+            raise ValueError(f"Column '{column_name}' not found in sheet '{sheet_name}' for '{rule_name}'")
+        return set(df[column_name].dropna().astype(str).str.lower())
+
+    def _load_keywords(self, rule_name):
+        """Loads keywords from a specified Excel sheet and multiple columns."""
+        sheet_config = self.config['sheet_map'][rule_name]
+        sheet_name = sheet_config['sheet']
+        columns = sheet_config['columns']
+        if sheet_name not in self.tables:
+            raise ValueError(f"Sheet '{sheet_name}' not found in Excel file for '{rule_name}'")
+        df = self.tables[sheet_name]
+        missing_columns = [col for col in columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Columns {missing_columns} not found in sheet '{sheet_name}' for '{rule_name}'")
+        keywords = set()
+        for column in columns:
+            column_values = df[column].dropna().apply(str).str.strip().str.lower()
+            keywords.update(column_values)
+        keywords.discard('')
+        return keywords
+
+    def _load_smtp_cache(self):
+        """Loads SMTP resolution cache from the 'SMTPResolutionCache' sheet."""
+        cache_sheet_name = self.config['sheet_map']['SMTPResolutionCache']['sheet']
+        if cache_sheet_name in self.tables:
+            cache_df = self.tables[cache_sheet_name]
+            if 'EntryName' in cache_df.columns and 'SMTPAddress' in cache_df.columns:
+                return dict(zip(
+                    cache_df['EntryName'].fillna('').astype(str).str.lower(),
+                    cache_df['SMTPAddress'].fillna('').astype(str).str.lower()
+                ))
+            else:
+                self.invalid_logger.warning(f"Missing 'EntryName' or 'SMTPAddress' columns in '{cache_sheet_name}' sheet. SMTP cache will not be loaded.")
+        else:
+            self.invalid_logger.warning(f"Sheet '{cache_sheet_name}' not found in Excel file. SMTP cache will not be loaded.")
+        return {}
+
+    def get_smtp_address(self, outlook_namespace, entry):
+        """Resolves the SMTP email address for an Outlook recipient or sender entry."""
+        if not entry:
+            self.invalid_logger.warning("NullEntry||get_smtp_address|Received a None entry.")
+            return None
+
+        name = getattr(entry, 'Name', '') or ''
+        address = getattr(entry, 'Address', '') or ''
+        name_key = (name.lower() if name else address.lower()) or ''
+
+        if not name_key:
+            self.invalid_logger.warning(f"EmptyNameKey|Name: '{name}', Address: '{address}'|get_smtp_address|No usable identifier for SMTP lookup.")
+            return None
+
+        cached = self.smtp_cache.get(name_key)
+        if cached:
+            return cached
+
+        smtp = None
+        try:
+            smtp = entry.PropertyAccessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x39FE001E")
+            if smtp:
+                smtp = smtp.lower()
+        except Exception:
+            pass
+
+        if not smtp and address:
+            smtp = address.lower()
+
+        if smtp:
+            self.new_smtp_entries[name_key] = smtp
+            self.smtp_cache[name_key] = smtp
+            return smtp
+        else:
+            self.invalid_logger.info(f"NoSMTPResolution|Name: '{name}', Address: '{address}'|get_smtp_address|Could not resolve SMTP address.")
+            return None
+
+    def extract_addresses(self, outlook_namespace, mail):
+        """Extracts all relevant email addresses (recipients and sender) from a mail item."""
+        recipients = set()
+        try:
+            for rec in mail.Recipients:
+                smtp = self.get_smtp_address(outlook_namespace, rec)
+                if smtp:
+                    recipients.add(smtp)
+        except Exception as e:
+            self.invalid_logger.error(f"RecipientParseError|{mail.Subject or 'NoSubject'}|extract_addresses|{e}")
+        sender = None
+        try:
+            sender = self.get_smtp_address(outlook_namespace, mail.Sender)
+            if sender:
+                recipients.add(sender)
+        except Exception as e:
+            self.invalid_logger.error(f"SenderParseError|{mail.Subject or 'NoSubject'}|extract_addresses|{e}")
+        if not recipients:
+            self.invalid_logger.error(f"NoAddressesFound|Subject: '{mail.Subject or 'NoSubject'}'|extract_addresses|No sender or recipient addresses extracted.")
+        return recipients
+
+    def _strip_html_tags(self, html_string):
+        """Strips HTML tags and normalizes whitespace."""
+        if not html_string: return ""
+        html_string = html_string.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<')
+        clean_text = re.sub(r'<script[^>]*>.*?</script>', '', html_string, flags=re.DOTALL | re.IGNORECASE)
+        clean_text = re.sub(r'<style[^>]*>.*?</style>', '', clean_text, flags=re.DOTALL | re.IGNORECASE)
+        clean_text = re.sub(r'<br\s*/?>', '\n', clean_text, flags=re.IGNORECASE)
+        clean_text = re.sub(r'</p>', '\n\n', clean_text, flags=re.IGNORECASE)
+        clean_text = re.sub(r'<[^>]*>', '', clean_text)
+        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
+        return clean_text
+
+    def keyword_match(self, mail, keywords, match_field="subject_and_body"):
+        """Checks if any of the provided keywords matches the subject or body of the email."""
+        try:
+            subject = (mail.Subject or "").lower()
+            body_html_cleaned = ""
+            try:
+                if hasattr(mail, 'HTMLBody') and mail.HTMLBody:
+                    body_html_cleaned = self._strip_html_tags(mail.HTMLBody).lower()
+            except Exception as e:
+                self.invalid_logger.warning(f"HTMLBodyReadError|{mail.Subject or 'NoSubject'}|keyword_match|Failed to read or strip HTMLBody: {e}")
+            body_plain_text = (mail.Body or "").lower()
+
+            target_content_strings = []
+            if match_field == "subject_only":
+                target_content_strings.append(subject)
+            elif match_field == "subject_and_body":
+                target_content_strings.append(subject)
+                if body_html_cleaned:
+                    target_content_strings.append(body_html_cleaned)
+                else:
+                    target_content_strings.append(body_plain_text)
+
+            for keyword in keywords:
+                regex = re.compile(re.escape(keyword), re.IGNORECASE) # Simpler, exact substring match is usually intended
+
+                for content_string in target_content_strings:
+                    if regex.search(content_string):
+                        return keyword
+            return None
+        except Exception as e:
+            self.invalid_logger.error(f"KeywordMatchError|{mail.Subject or 'NoSubject'}|keyword_match|{e}")
+            return None
+
+    def log_email(self, logger, outlook_namespace, mail, match_info, dest_folder_name):
+        """Logs processed email information to the specified logger."""
+        try:
+            sent_on = mail.SentOn
+            date_str = sent_on.strftime("%Y-%m-%d")
+            time_str = sent_on.strftime("%H:%M:%S")
+
+            # This call updates the new_smtp_entries cache
+            sender_smtp = self.get_smtp_address(outlook_namespace, mail.Sender) or "Unknown"
+            subject = (mail.Subject or "NoSubject").replace('|', ' ').replace('\n', ' ').strip()
+
+            log_entry = f"{date_str}|{time_str}|{sender_smtp}|{subject}|{match_info}|{dest_folder_name}"
+            logger.info(log_entry)
+        except Exception as e:
+            self.invalid_logger.error(
+                f"LogFormatError|Subject: '{getattr(mail, 'Subject', 'NoSubject') or 'NoSubject'}'|"
+                f"log_email|Failed to format log entry: {e}"
+            )
+
+    def process_email(self, outlook_namespace, mail, logger, folder_objects_map):
+        """
+        Processes a single email. Only Rules 1 and 7 are active and perform deletion.
+        """
+        try:
+            # Note: extract_addresses includes calling get_smtp_address, updating new_smtp_entries
+            # This is called regardless of whether a rule matches, to keep the cache updated.
+            self.extract_addresses(outlook_namespace, mail)
+
+            # Rule 1: Keyword in subject ONLY from KeywordSubject_ToDelete1 (highest priority)
+            if self.keyword_match(mail, self.keyword_subject_to_delete1_keywords, match_field="subject_only"):
+                # Mark as deleted. Actual deletion is asynchronous (MailItem.Delete)
+                mail.Delete()
+                dest_folder_name = self.config['sheet_map']['KeywordSubject_ToDelete1']['destination_name']
+                self.log_email(logger, outlook_namespace, mail, "Matched by Rule 1 (DELETED)", dest_folder_name)
+                return True
+
+            # Rule 7: Keyword in subject ONLY from KeywordSubject_ToDelete
+            if self.keyword_match(mail, self.keyword_subject_to_delete_keywords, match_field="subject_only"):
+                # Mark as deleted.
+                mail.Delete()
+                dest_folder_name = self.config['sheet_map']['KeywordSubject_ToDelete']['destination_name']
+                self.log_email(logger, outlook_namespace, mail, f"Matched by Rule 7 (DELETED)", dest_folder_name)
+                return True
+
+            return False # No active rule matched, email is skipped
+
+        except Exception as e:
+            subject = getattr(mail, 'Subject', 'Unknown') or 'NoSubject'
+            self.invalid_logger.error(f"EmailProcessingError|Subject: '{subject}'|process_email|{e}")
+            print(f"Error processing email '{subject}': {e}")
+            return False
+
+    def _process_emails_in_folder(self, outlook_namespace, folder_to_process, logger, start_date_time, end_date_time):
+        """
+        Processes emails within a folder using backward iteration by index to avoid
+        'item moved or deleted' errors during bulk deletion, without collecting all IDs.
+        """
+        processed_count = 0
+        folder_name = getattr(folder_to_process, 'Name', 'Unknown')
+        folder_path = folder_to_process.FolderPath
+        dummy_folder_map = {}
+
+        if not hasattr(folder_to_process, 'Items'):
+            self.invalid_logger.warning(f"Skipping folder|{folder_path}|_process_emails_in_folder|Folder object has no 'Items'.")
+            return 0
+
+        try:
+            messages = folder_to_process.Items
+
+            # 1. Sort the entire collection in descending order (most recent first)
+            # This is crucial for safe backward iteration.
+            messages.Sort("[ReceivedTime]", False)
+
+            # 2. Apply date restriction filter
+            filter_string = ""
+            if start_date_time and end_date_time:
+                start_date_outlook_str = start_date_time.strftime('%d/%m/%Y %H:%M %p')
+                end_date_outlook_str = end_date_time.strftime('%d/%m/%Y %H:%M %p')
+                # Outlook filter is on [ReceivedTime]
+                filter_string = f"[ReceivedTime] >= '{start_date_outlook_str}' AND [ReceivedTime] <= '{end_date_outlook_str}'"
+                print(f"Applying filter to {folder_name}: {filter_string}")
+
+            if filter_string:
+                filtered_messages = messages.Restrict(filter_string)
+            else:
+                filtered_messages = messages
+
+            current_message_count = filtered_messages.Count
+            print(f"Starting to process {current_message_count} emails in {folder_name}...")
+
+            # 3. Iterate backwards by index (from Count down to 1) to safely delete items
+            for i in range(current_message_count, 0, -1):
+                mail = None
+                try:
+                    mail = filtered_messages.Item(i)
+
+                    # Ensure it is a MailItem, skipping other types like AppointmentItem
+                    if hasattr(mail, 'Class') and mail.Class == self.OL_MAIL_ITEM:
+                        if self.process_email(outlook_namespace, mail, logger, dummy_folder_map):
+                            processed_count += 1
+                            # Add a small delay after deleting to stabilize MAPI for Online Archive
+                            time.sleep(0.01)
+
+                except Exception as msg_error:
+                    # Check for the specific COM error related to item deletion/moving
+                    error_str = str(msg_error)
+                    if self.ITEM_MOVED_OR_DELETED_HRESULT in msg_error.args[0] or 'moved or deleted' in error_str:
+                        # This item failed because it was deleted/moved by a previous step
+                        # or an external process (like Outlook sync). Log and continue.
+                        self.invalid_logger.warning(f"ProcessSkipped|Index:{i}, Folder: '{folder_path}'|_process_emails_in_folder|Item concurrently moved or deleted. Skipping.")
+                        continue
+                    else:
+                        # Log other unexpected message access/processing errors
+                        subject = getattr(mail, 'Subject', 'Unknown') or 'NoSubject'
+                        self.invalid_logger.error(f"MessageAccessError|Folder: '{folder_path}', Index: {i}, Subject: '{subject}'|_process_emails_in_folder|{msg_error}")
+                        continue
+
+        except Exception as e:
+            # Catch all remaining unforeseen errors during the folder processing itself
+            self.invalid_logger.critical(f"FolderProcessingError|{folder_path}|_process_emails_in_folder|{e}")
+            print(f"Critical error processing folder {folder_name}: {e}")
+            return 0
+
+        return processed_count
+
+    def _recurse_and_process_folder(self, outlook_namespace, parent_folder, logger, start_date_time, end_date_time):
+        """
+        Recursively processes emails in a folder and its subfolders,
+        handling intermediate cache saves. (Generator function)
+        """
+
+        # 1. Process emails in the current folder
+        try:
+            count_in_current_folder = self._process_emails_in_folder(
+                outlook_namespace, parent_folder, logger, start_date_time, end_date_time
+            )
+            yield count_in_current_folder
+        except Exception as e:
+            folder_path = getattr(parent_folder, 'FolderPath', 'UnknownPath')
+            self.invalid_logger.critical(f"FolderProcessUnhandledError|{folder_path}|_recurse_and_process_folder|{e}")
+            print(f"Unhandled critical error processing folder {folder_path}: {e}")
+            yield 0
+
+        # 2. Recurse into subfolders
+        try:
+            for folder in parent_folder.Folders:
+                # Yield results from sub-recursions
+                yield from self._recurse_and_process_folder(
+                    outlook_namespace, folder, logger, start_date_time, end_date_time
+                )
+        except Exception as e:
+            folder_path = getattr(parent_folder, 'FolderPath', 'UnknownPath')
+            self.invalid_logger.critical(f"FolderRecursionError|{folder_path}|_recurse_and_process_folder|{e}")
+            print(f"Critical error during recursion for folder {folder_path}: {e}")
+
+    def run_bulk(self, start_date=None, end_date=None):
+        """
+        Runs the email sorter in bulk mode, processing ONLY the configured
+        Online Archive folder recursively.
+        """
+        start_time = datetime.datetime.now()
+
+        start_date_time = None
+        end_date_time = None
+
+        if start_date and end_date:
+            start_date_time = datetime.datetime.combine(start_date, datetime.time.min)
+            end_date_time = datetime.datetime.combine(end_date, datetime.time.max)
+            date_range_str = f"Date Range: {start_date} to {end_date}"
+        else:
+            date_range_str = "All Emails (No Date Filter)"
+
+        print(f"Starting bulk processing for: {date_range_str}...")
+        self.bulk_logger.info(f"Bulk mode started for: {date_range_str}.")
+
+        outlook_app = None
+        outlook_namespace = None
+        total_processed = 0
+        processed_since_last_save = 0
+
+        try:
+            pythoncom.CoInitialize()
+            outlook_app = win32com.client.Dispatch("Outlook.Application")
+            outlook_namespace = outlook_app.GetNamespace("MAPI")
+
+            # --- Locate the specific Online Archive mailbox ---
+            archive_mailbox = None
+            archive_folder_name_lower = self.archive_folder_name.lower()
+
+            print(f"Searching for Outlook folder/mailbox named: '{self.archive_folder_name}'...")
+
+            for root_folder in outlook_namespace.Folders:
+                # Compare the name of the root folder against the configured archive name
+                if root_folder.Name.lower() == archive_folder_name_lower:
+                    archive_mailbox = root_folder
+                    break
+
+            if not archive_mailbox:
+                error_msg = (f"FATAL: The configured archive mailbox '{self.archive_folder_name}' was not found in your Outlook profile.\n"
+                             "Please ensure the name exactly matches the folder as seen in Outlook.")
+                self.invalid_logger.critical(f"MailboxNotFoundFatal||run_bulk|{error_msg}")
+                messagebox.showerror("Fatal Error", error_msg)
+                return # Exit the function cleanly
+
+            print(f"Found and starting processing in: {archive_mailbox.Name}")
+            self.bulk_logger.info(f"Processing started on targeted mailbox: {archive_mailbox.Name}")
+
+            # Process the *single* targeted archive mailbox recursively
+            for count_in_folder in self._recurse_and_process_folder(
+                outlook_namespace,
+                archive_mailbox, # Start recursion from the found archive mailbox
+                self.bulk_logger,
+                start_date_time,
+                end_date_time
+            ):
+                total_processed += count_in_folder
+                processed_since_last_save += count_in_folder
+
+                # Check if it's time for an intermediate cache save
+                if processed_since_last_save >= self.CACHE_SAVE_INTERVAL:
+                    # Intermediate save call removed as per request
+                    processed_since_last_save = 0
+
+
+        except Exception as e:
+            self.invalid_logger.critical(f"BulkModeFatalError||run_bulk|A critical error occurred in bulk mode: {e}")
+            print(f"A critical error occurred in bulk mode: {e}.")
+
+        finally:
+            # Final cache save at the end of the run removed as per request
+
+            end_time = datetime.datetime.now()
+            duration = end_time - start_time
+            print(f"\nBulk processing completed. Total processed/deleted: {total_processed} emails.")
+            print(f"Duration: {duration}")
+            self.bulk_logger.info(f"Bulk mode completed. Total processed: {total_processed} emails. Duration: {duration}")
+
+            # Ensure the message box is displayed (this works for the primary thread)
+            messagebox.showinfo("Bulk Processing Complete",
+                                f"Bulk processing finished in {duration.total_seconds():.2f} seconds.\n"
+                                f"Total emails processed/deleted: {total_processed}\n"
+                                f"Mode: {date_range_str}")
+
+            if outlook_app:
+                try: del outlook_namespace
+                except Exception: pass
+                try: del outlook_app
+                except Exception: pass
+            if 'pythoncom' in globals():
+                try:
+                    pythoncom.CoUninitialize()
+                except Exception: pass
+
+    def save_smtp_cache(self, show_prompt=True):
+        """
+        Saves newly resolved SMTP entries to the 'SMTPResolutionCache' sheet.
+        (Logic removed as per user request to stop writing to Excel)
+        """
+        pass
+
+
+    def start_gui(self):
+        """Starts the main Tkinter GUI for the Online Archive Sorter (Bulk-Only)."""
+        root = tk.Tk()
+        root.title("Online Archive Sorter v01.04 (Bulk/Delete)")
+        root.geometry("350x250")
+        root.resizable(False, False)
+        root.attributes('-topmost', True)
+
+        header_label = tk.Label(root, text="Online Archive Sorter (Bulk Mode)", font=("Arial", 16, "bold"), fg="#333333")
+        header_label.pack(pady=15)
+
+        info_label = tk.Label(root, text="Current Active Rules: Rule 1 & Rule 7 (Delete)", font=("Arial", 10), fg="#555555")
+        info_label.pack(pady=5)
+
+        date_filter_var = tk.BooleanVar(value=False)
+        date_filter_checkbox = tk.Checkbutton(root, text="Enable Date Range Filter", variable=date_filter_var, font=("Arial", 10))
+        date_filter_checkbox.pack(pady=10)
+
+        def pick_bulk():
+            """Handles bulk mode selection, prompting for date range if checked."""
+            if date_filter_var.get():
+                # --- Date Range Selection UI (if enabled) ---
+                cal_win = tk.Toplevel(root)
+                cal_win.title("Select Date Range for Bulk Processing")
+                cal_win.geometry("350x550")
+                cal_win.resizable(False, False)
+                cal_win.attributes('-topmost', True)
+                cal_win.grab_set()
+
+                start_date_label = tk.Label(cal_win, text="Select Start Date:", font=("Arial", 10))
+                start_date_label.pack(pady=(10, 0))
+                cal_start = Calendar(cal_win, selectmode='day', date_pattern='yyyy-mm-dd', background="blue", foreground="white", headersbackground="blue", headersforeground="white", selectbackground="green", selectforeground="white", normalbackground="lightgray", weekendbackground="darkgray")
+                cal_start.pack(pady=(0, 10))
+
+                end_date_label = tk.Label(cal_win, text="Select End Date:", font=("Arial", 10))
+                end_date_label.pack(pady=(10, 0))
+
+                end_date_today_var = tk.BooleanVar(value=True)
+                end_date_checkbox = tk.Checkbutton(cal_win, text="End Date as Today", variable=end_date_today_var, font=("Arial", 9))
+                end_date_checkbox.pack(anchor=tk.W, padx=10)
+
+                cal_end = Calendar(cal_win, selectmode='day', date_pattern='yyyy-mm-dd', background="blue", foreground="white", headersbackground="blue", headersforeground="white", selectbackground="green", selectforeground="white", normalbackground="lightgray", weekendbackground="darkgray")
+                cal_end.pack(pady=(0, 10))
+
+                def toggle_end_date_calendar():
+                    state = 'disabled' if end_date_today_var.get() else 'normal'
+                    cal_end.config(state=state)
+                end_date_today_var.trace_add("write", lambda *args: toggle_end_date_calendar())
+                toggle_end_date_calendar()
+
+                def validate_dates_and_process():
+                    selected_start_date = cal_start.selection_get()
+                    selected_end_date = datetime.date.today() if end_date_today_var.get() else cal_end.selection_get()
+
+                    today = datetime.date.today()
+                    if selected_start_date > today or selected_end_date > today:
+                        messagebox.showerror("Invalid Date", "Dates cannot be in the future.")
+                        return
+                    if selected_start_date > selected_end_date:
+                        messagebox.showerror("Invalid Date Range", "Start Date cannot be after End Date.")
+                        return
+
+                    cal_win.destroy()
+                    root.destroy()
+                    threading.Thread(target=lambda: self.run_bulk(selected_start_date, selected_end_date), daemon=True).start()
+
+                button_frame = tk.Frame(cal_win)
+                button_frame.pack(pady=10)
+
+                tk.Button(button_frame, text="Process", command=validate_dates_and_process, bg="#28a745", fg="white", width=12, height=1, font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=10)
+                tk.Button(button_frame, text="Cancel", command=cal_win.destroy, bg="#dc3545", fg="white", width=12, height=1, font=("Arial", 10, "bold")).pack(side=tk.LEFT, padx=10)
+
+            else:
+                # --- Default: Process All Emails ---
+                if not messagebox.askyesno("Confirm Bulk Operation",
+                                          f"You have chosen to run Bulk Mode without a date filter in the mailbox '{self.archive_folder_name}'.\n\n"
+                                          "This will recursively process ALL emails in this mailbox.\n"
+                                          "Emails matching Rule 1 or Rule 7 will be PERMANENTLY DELETED.\n\n"
+                                          "Do you wish to proceed?"):
+                    return
+
+                root.destroy()
+                # Run bulk with no dates (processes all emails)
+                threading.Thread(target=lambda: self.run_bulk(), daemon=True).start()
+
+        tk.Button(root, text="Start Bulk Processing", command=pick_bulk,
+                  bg="#ffc107", fg="black", width=25, height=2,
+                  font=("Arial", 11, "bold"), relief=tk.RAISED).pack(pady=20)
+
+        def on_closing():
+            # Save prompt removed as per user request to stop writing to Excel
+            root.destroy()
+            sys.exit(0)
+
+        root.protocol("WM_DELETE_WINDOW", on_closing)
+        root.mainloop()
+
+def main():
+    """Main function to run the Online Archive Sorter application."""
+    sorter = None
+    try:
+        sorter = OnlineArchiveSorter()
+        sorter.start_gui()
+    except Exception as e:
+        print(f"Error starting Online Archive Sorter application: {e}")
+        if sorter and sorter.invalid_logger:
+            sorter.invalid_logger.critical(f"AppStartupError||main|{e}")
+
+if __name__ == "__main__":
+    main()
