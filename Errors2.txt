@@ -1,0 +1,110 @@
+Python 3.9.12 (main, Apr  4 2022, 05:22:27) [MSC v.1916 64 bit (AMD64)] on win32
+Type "help", "copyright", "credits" or "license()" for more information.
+= RESTART: C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\abc\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\abc\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 90-91: character maps to <undefined>
+Call stack:
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 270, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 214, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 233, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 169, in process_email
+    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|Research|hakken|KeywordMatch|[External] Hakken (発見) PB FX Monthly [June 2023]'
+Arguments: ()
+
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\abc\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\abc\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 137-141: character maps to <undefined>
+Call stack:
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 270, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 214, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 233, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 158, in process_email
+    return self.execute_action(item, rule_info['dest'], archive_root, sender_email, "EmailMatch")
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|Research|ghijklmarketing@ghi.com|EmailMatch|[External] Last Chance! Thank You For Your Support ⭐⭐⭐⭐⭐'
+Arguments: ()
+
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\abc\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\abc\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 90-91: character maps to <undefined>
+Call stack:
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 270, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 214, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 233, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 169, in process_email
+    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|Research|hakken|KeywordMatch|[External] Nomura Hakken (発見) PB FX Monthly [July 2023]'
+Arguments: ()
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\abc\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\abc\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode characters in position 119-120: character maps to <undefined>
+Call stack:
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\abc\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 270, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 214, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 233, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 158, in process_email
+    return self.execute_action(item, rule_info['dest'], archive_root, sender_email, "EmailMatch")
+  File "C:\Users\abc\OneDrive - def\Documents\Tools\PythonScripts\OutlookArchiveManagement\online_archive_sorter_v02_01.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|Research|ghijklmarketing@ghi.com|EmailMatch|[External] CPI Continues to Cool 🌡️'
+Arguments: ()
+>>> 
