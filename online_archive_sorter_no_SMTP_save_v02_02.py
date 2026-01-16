@@ -1,0 +1,269 @@
+# -*- coding: utf-8 -*-
+"""
+Online_Archive_Sorter_v02_01.py
+Forked from InboxSorter_v38.11 and OnlineArchiveSorter_v01.03.
+
+This version supports all 11 rules. 
+- Rules targeting "ToDelete" result in permanent deletion.
+- Other rules move items to folders within the Online Archive.
+- User selects specific folder (Root/Inbox/Sub-Inboxes) at runtime.
+"""
+
+import os
+import win32com.client
+import pandas as pd
+import datetime
+import openpyxl
+import tkinter as tk
+from tkinter import messagebox, simpledialog, ttk
+import threading
+import logging
+import time
+import json
+import re
+import pythoncom
+import sys
+
+class OnlineArchiveSorter:
+    CONFIG_FILE_NAME = 'config_archive_v02.json'
+    MAIL_ITEM_CLASS = 43 
+
+    def __init__(self):
+        self.config = self._load_config()
+        self.setup_paths()
+        self.setup_logging()
+        
+        # Load interval from config, default to 500
+        self.cache_save_interval = self.config.get("cache_save_interval", 500)
+        
+        self.email_rules = {}
+        self.keyword_rules = {}
+        self.smtp_cache = {}
+        self.processed_count = 0
+        self.items_since_last_save = 0
+        
+        self.load_data()
+
+    def _load_config(self):
+        if not os.path.exists(self.CONFIG_FILE_NAME):
+            print(f"Error: Config file {self.CONFIG_FILE_NAME} not found.")
+            sys.exit(1)
+        with open(self.CONFIG_FILE_NAME, 'r') as f:
+            return json.load(f)
+
+    def setup_paths(self):
+        self.xls_path = self.config.get('xls_path')
+        self.archive_name = self.config.get('archive_folder_name')
+
+    def setup_logging(self):
+        self.bulk_logger = self._create_logger('bulk_logger', self.config.get('log_bulk_path'))
+        self.invalid_logger = self._create_logger('invalid_logger', self.config.get('log_invalid_path'))
+
+    def _create_logger(self, name, log_file):
+        logger = logging.getLogger(name)
+        logger.setLevel(logging.INFO)
+        if not logger.handlers:
+            handler = logging.FileHandler(log_file)
+            formatter = logging.Formatter('%(asctime)s|%(levelname)s|%(message)s')
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+        return logger
+
+    def load_data(self):
+        """Loads all 11 rules from Excel as per v38.11 logic."""
+        try:
+            with pd.ExcelFile(self.xls_path) as xls:
+                sheet_map = self.config.get('sheet_map', {})
+                
+                for rule_name, info in sheet_map.items():
+                    df = pd.read_excel(xls, info['sheet'])
+                    dest = info['destination_name']
+                    
+                    # Logic for Email rules
+                    if 'Email' in rule_name and 'Keyword' not in rule_name:
+                        col = info['column']
+                        addresses = df[col].dropna().unique().tolist()
+                        for addr in addresses:
+                            # Rule 8 specific: ResearchEmail is sender only
+                            is_sender_only = (rule_name == "ResearchEmail")
+                            self.email_rules[addr.lower()] = {"dest": dest, "sender_only": is_sender_only}
+                    
+                    # Logic for Keyword rules
+                    else:
+                        cols = info.get('columns', [info.get('column')])
+                        match_field = info.get('match_field', 'subject_only')
+                        for col in cols:
+                            keywords = df[col].dropna().unique().tolist()
+                            for kw in keywords:
+                                self.keyword_rules[str(kw).lower()] = {"dest": dest, "field": match_field}
+
+                # Load SMTP Cache
+                try:
+                    cache_df = pd.read_excel(xls, 'SMTP_Cache')
+                    self.smtp_cache = dict(zip(cache_df['ExchangeAddress'].str.lower(), cache_df['SMTPAddress']))
+                except:
+                    self.smtp_cache = {}
+        except Exception as e:
+            self.invalid_logger.critical(f"DataLoaderError||{e}")
+
+    def save_smtp_cache(self):
+        """Saves new SMTP resolutions back to the Excel file - REMOVED."""
+        pass
+
+    def get_smtp_address(self, item):
+        try:
+            sender_obj = item.Sender
+            if sender_obj.AddressEntryUserType == 0: # olExchangeUserAddressEntry
+                ex_addr = sender_obj.Address.lower()
+                if ex_addr in self.smtp_cache:
+                    return self.smtp_cache[ex_addr]
+                eu = sender_obj.GetExchangeUser()
+                if eu:
+                    smtp = eu.PrimarySmtpAddress
+                    self.smtp_cache[ex_addr] = smtp
+                    return smtp
+            return item.SenderEmailAddress
+        except:
+            return None
+
+    def get_folder_recursive(self, root_folder, folder_path):
+        """Finds or creates folders within the Archive root."""
+        current_node = root_folder
+        parts = folder_path.split('\\')
+        for part in parts:
+            try:
+                current_node = current_node.Folders.Item(part)
+            except:
+                current_node = current_node.Folders.Add(part)
+        return current_node
+
+    def process_email(self, item, archive_root):
+        """Determines if email should be deleted or moved based on 11 rules."""
+        try:
+            subject = str(item.Subject).lower()
+            body = str(item.Body).lower()
+            sender_email = (self.get_smtp_address(item) or "").lower()
+            
+            # 1. Check Email Rules
+            if sender_email in self.email_rules:
+                rule_info = self.email_rules[sender_email]
+                # Rule 8 Logic: Check if sender_only is required
+                if not rule_info.get("sender_only") or sender_email:
+                    return self.execute_action(item, rule_info['dest'], archive_root, sender_email, "EmailMatch")
+
+            # 2. Check Keyword Rules
+            for kw, info in self.keyword_rules.items():
+                match = False
+                if info['field'] == 'subject_only' and kw in subject:
+                    match = True
+                elif info['field'] == 'subject_and_body' and (kw in subject or kw in body):
+                    match = True
+                
+                if match:
+                    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+            
+            return False
+        except Exception as e:
+            self.invalid_logger.error(f"ItemProcessError||{e}")
+            return False
+
+    def execute_action(self, item, dest_name, archive_root, trigger, match_type):
+        """Performs Delete or Move."""
+        try:
+            if dest_name == "ToDelete":
+                item.Delete()
+                self.bulk_logger.info(f"DELETED|{trigger}|{match_type}|{item.Subject}")
+                return True
+            else:
+                dest_folder = self.get_folder_recursive(archive_root, dest_name)
+                item.Move(dest_folder)
+                self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+                return True
+        except Exception as e:
+            self.invalid_logger.error(f"ActionError|{dest_name}|{e}")
+            return False
+
+    def run_archive_processing(self, target_folder_path):
+        pythoncom.CoInitialize()
+        try:
+            outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+            archive_root = None
+            
+            for store in outlook.Stores:
+                if store.DisplayName == self.archive_name:
+                    archive_root = store.GetRootFolder()
+                    break
+            
+            if not archive_root:
+                messagebox.showerror("Error", f"Could not find archive: {self.archive_name}")
+                return
+
+            # Resolve the specific folder selected by user
+            target_folder = archive_root
+            if target_folder_path != "ROOT":
+                for part in target_folder_path.split('\\'):
+                    target_folder = target_folder.Folders.Item(part)
+
+            self.bulk_logger.info(f"STARTING|Folder: {target_folder.FolderPath}")
+            self._process_folder_items(target_folder, archive_root)
+            
+            messagebox.showinfo("Done", f"Processing complete.\nProcessed: {self.processed_count} items.")
+            
+        except Exception as e:
+            self.invalid_logger.critical(f"GlobalRunError||{e}")
+        finally:
+            pythoncom.CoUninitialize()
+
+    def _process_folder_items(self, folder, archive_root):
+        """Iterates backwards to ensure stability during moves/deletes."""
+        try:
+            items = folder.Items
+            count = items.Count
+            for i in range(count, 0, -1):
+                try:
+                    item = items.Item(i)
+                    if item.Class == self.MAIL_ITEM_CLASS:
+                        if self.process_email(item, archive_root):
+                            self.processed_count += 1
+                except Exception as e:
+                    # Likely item moved/deleted or COM error
+                    continue
+        except Exception as e:
+            self.invalid_logger.error(f"FolderProcessingError|{folder.Name}|{e}")
+
+    def start_gui(self):
+        root = tk.Tk()
+        root.title(f"Online Archive Sorter v02.01")
+        root.geometry("450x400")
+
+        tk.Label(root, text="Select Folder to Process:", font=("Arial", 12, "bold")).pack(pady=10)
+
+        # Folder selection list
+        folders = [
+            "ROOT",
+            "Inbox",
+            "Inbox\\Inbox1",
+            "Inbox\\Inbox2",
+            "Inbox\\Inbox3",
+            "Inbox\\Inbox4"
+        ]
+        
+        selected_folder = tk.StringVar(value="Inbox")
+        for f in folders:
+            tk.Radiobutton(root, text=f, variable=selected_folder, value=f).pack(anchor="w", padx=50)
+
+        def start_task():
+            folder_to_process = selected_folder.get()
+            if messagebox.askyesno("Confirm", f"Process matching emails in {folder_to_process}?\n\n'ToDelete' items will be PERMANENTLY DELETED."):
+                btn_start.config(state=tk.DISABLED)
+                threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+
+        btn_start = tk.Button(root, text="Start Processing", command=start_task, 
+                              bg="#28a745", fg="white", font=("Arial", 11, "bold"), height=2, width=20)
+        btn_start.pack(pady=20)
+
+        root.mainloop()
+
+if __name__ == "__main__":
+    sorter = OnlineArchiveSorter()
+    sorter.start_gui()
