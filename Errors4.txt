@@ -1,0 +1,12 @@
+Traceback (most recent call last):
+  File "C:/Users/abc/OneDrive - def/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_07.py", line 32, in <module>
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+AttributeError: 'StdOutputFile' object has no attribute 'reconfigure'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:/Users/abc/OneDrive - def/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_07.py", line 37, in <module>
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+AttributeError: 'StdOutputFile' object has no attribute 'buffer'
+>>> 
