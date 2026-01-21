@@ -1,0 +1,184 @@
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\jkl\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\jkl\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2b50' in position 97: character maps to <undefined>
+Call stack:
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 332, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 246, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 279, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 158, in process_email
+    return self.execute_action(item, rule_info['dest'], archive_root, sender_email, "EmailMatch")
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|Research|mnovelocitymarketing@mno.com|EmailMatch|[External] ⭐ Save Your Faves on mno Velocity ⭐'
+Arguments: ()
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\jkl\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\jkl\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f525' in position 135: character maps to <undefined>
+Call stack:
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 332, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 246, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 279, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 169, in process_email
+    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|DACS|vux|KeywordMatch|[External] LAST 3 DAYS: Take $150 Cashback, 6 months Unlimited Data and more! 🔥'
+Arguments: ()
+
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\jkl\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\jkl\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f525' in position 141: character maps to <undefined>
+Call stack:
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 332, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 246, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 279, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 169, in process_email
+    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|DACS|vux|KeywordMatch|[External] [Circles.Life 10.10] Last few days for 6 Months Unlimited Data and More! 🔥'
+Arguments: ()
+
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\jkl\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\jkl\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f631' in position 97: character maps to <undefined>
+Call stack:
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 332, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 246, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 279, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 169, in process_email
+    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|DACS|stu|KeywordMatch|[External] 6 Months Unlimited and MORE? 😱'
+Arguments: ()
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\jkl\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\jkl\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f4aa' in position 102: character maps to <undefined>
+Call stack:
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 332, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 246, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 279, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 169, in process_email
+    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|DACS|pqr|KeywordMatch|[External] With 12.12 comes unlimited power 💪'
+Arguments: ()
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\jkl\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\jkl\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f609' in position 110: character maps to <undefined>
+Call stack:
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 332, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 246, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 279, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 169, in process_email
+    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|DACS|tht|KeywordMatch|[External] [December Special] Be even more Unlimited 😉'
+Arguments: ()
+--- Logging error ---
+Traceback (most recent call last):
+  File "C:\Users\jkl\Anaconda3\lib\logging\__init__.py", line 1086, in emit
+    stream.write(msg + self.terminator)
+  File "C:\Users\jkl\Anaconda3\lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f385' in position 68: character maps to <undefined>
+Call stack:
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 930, in _bootstrap
+    self._bootstrap_inner()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 973, in _bootstrap_inner
+    self.run()
+  File "C:\Users\jkl\Anaconda3\lib\threading.py", line 910, in run
+    self._target(*self._args, **self._kwargs)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 332, in <lambda>
+    threading.Thread(target=lambda: self.run_archive_processing(folder_to_process), daemon=True).start()
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 246, in run_archive_processing
+    self._process_folder_items(target_folder, archive_root)
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 279, in _process_folder_items
+    if self.process_email(item, archive_root):
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 169, in process_email
+    return self.execute_action(item, info['dest'], archive_root, kw, "KeywordMatch")
+  File "C:/Users/jkl/OneDrive - ghi/Documents/Tools/PythonScripts/OutlookArchiveManagement/online_archive_sorter_v02_06.py", line 186, in execute_action
+    self.bulk_logger.info(f"MOVED|{dest_name}|{trigger}|{match_type}|{item.Subject}")
+Message: 'MOVED|DACS|vux|KeywordMatch|[External] 🎅 Christmas Gift: Unlimited Everything at $20/mo FOREVER'
+Arguments: ()
